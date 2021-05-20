@@ -37,11 +37,18 @@ namespace Client
 
             while (message != "start")
             {
-                _ = Task.Run(async () => message = await Connect.Waiting());
-                Console.WriteLine(message);
-            }
+                message = Connect.Waiting();
 
-            Console.Clear();
+                if (message != "" && message != "start") 
+                {
+                    Console.WriteLine(message);
+                    message = string.Empty;
+                }
+                
+            }
+            Console.WriteLine(message);
+            Console.ReadLine();
+            //Console.Clear();
         }
 
 
