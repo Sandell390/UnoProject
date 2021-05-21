@@ -25,19 +25,6 @@ namespace Server
         {
             playerState = State.UNO;
         }
-        public void CheckUno()
-        {
-
-            if (playerCards.Count == 1 && playerState == State.ACTIVE)
-            {
-                Console.WriteLine("Type 'u' for call UNO");
-            }
-
-            if (playerCards.Count > 1)
-            {
-                playerState = State.ACTIVE;
-            }
-        }
 
         public Player(TcpClient _client, string _name) 
         {

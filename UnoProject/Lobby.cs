@@ -39,7 +39,7 @@ namespace Server
             foreach (Player player in players)
             {
                 string msg = $"{newPlayer.name} has joined the game, Get ready to be destroyed";
-                ConnectHandler.SendPacket(player.client, new Packet("joinedP", msg, new List<Card>())).GetAwaiter().GetResult();
+                ConnectHandler.SendPacket(player.client, new Packet("message", msg )).GetAwaiter().GetResult();
             }
 
             players.Add(newPlayer);
@@ -49,9 +49,15 @@ namespace Server
         {
             while (!isGameStarted)
             {
-                _checkForDisconnects();   
+                _checkForDisconnects();
 
-                Packet startCommand = ConnectHandler.ReceivePacket(Host.client).GetAwaiter().GetResult();
+                Packet startCommand = null;
+
+                while (startCommand == null)
+                {
+                    startCommand = ConnectHandler.ReceivePacket(Host.client).GetAwaiter().GetResult();
+                    Thread.Sleep(20);
+                }
 
                 if (startCommand.Command == "start" && players.Count > 1) 
                 {
@@ -60,9 +66,11 @@ namespace Server
                 else if (startCommand.Command == "start")
                 {
                     string msg = "There is not enough players to start the game, YOU FUCK HEAD";
-                    ConnectHandler.SendPacket(Host.client,new Packet("failedStart",msg)).GetAwaiter().GetResult();
+                    ConnectHandler.SendPacket(Host.client,new Packet("failedStart", msg)).GetAwaiter().GetResult();
                 }
             }
+
+            random = new Random();
 
             createDeck();
 
@@ -80,7 +88,6 @@ namespace Server
                 {
                     isGameStarted = false;
                 }
-
             }
 
 
@@ -183,7 +190,6 @@ namespace Server
 
         public void NextRoud()
         {
-            Console.Clear();
 
             bool completeRound = false;
 
@@ -193,7 +199,18 @@ namespace Server
                 sendDeck.Add(playedDeck[playedDeck.Count - 1]);
                 sendDeck.AddRange(players[0].playerCards);
 
-                Task.Run(async () => await ConnectHandler.SendPacket(players[0].client, new Packet("cards", "", sendDeck)));
+                ConnectHandler.SendPacket(players[0].client, new Packet("cards", $"{players[0].name};uno", cards: sendDeck)).GetAwaiter().GetResult();
+
+                List<Card> blankCards = new List<Card>();
+                blankCards.Add(sendDeck[0]);
+                for (int i = 1; i < sendDeck.Count; i++)
+                {
+                    blankCards.Add(new Card(Card.colorState.NULL,Card.cardType.BLANK));
+                }
+                for (int i = 1; i < players.Count; i++)
+                {
+                    ConnectHandler.SendPacket(players[i].client, new Packet("cards", $"{players[0].name}", cards: blankCards)).GetAwaiter().GetResult();
+                }
 
                 //playedDeck[playedDeck.Count - 1].showCard();
 
@@ -212,13 +229,17 @@ namespace Server
                 {
                     givPlayerCards(1, 0);
                 }
-                else if (ChoicePacket.Command == "uno")
+                else if (ChoicePacket.Command == "uno" && players[0].playerCards.Count == 1)
                 {
                     players[0].setUNO();
                 }
+                else if (ChoicePacket.Command == "uno")
+                {
+                    Error("You cant call uno now");
+                }
                 else if (ChoicePacket.Command == "turn" && ActionDeck.Count > 0) //Checks if player can end the round
                 {
-                    putPlayerLastInList();
+                    
 
 
                     for (int i = 0; i < ActionDeck.Count; i++)
@@ -228,6 +249,7 @@ namespace Server
                     }
                     ActionDeck.Clear();
 
+                    putPlayerLastInList();
                     completeRound = true;
                     stackCard = false;
                 }
@@ -275,7 +297,7 @@ namespace Server
 
             if (players[0].playerState == Player.State.ACTIVE && players[0].playerCards.Count == 1)
             {
-                Task.Run(async () => await ConnectHandler.SendPacket(players[0].client, new Packet("ups", "You forgot to call UNO, Have fun with your new card")));
+                Task.Run(async () => await ConnectHandler.SendPacket(players[0].client, new Packet("message", "You forgot to call UNO, Have fun with your new card")));
                 Thread.Sleep(1100);
 
 
@@ -307,7 +329,7 @@ namespace Server
         void Error(string message)
         {
             Thread.Sleep(10);
-            Task.Run(async () => await ConnectHandler.SendPacket(players[0].client, new Packet("failed", message)));
+            Task.Run(async () => await ConnectHandler.SendPacket(players[0].client, new Packet("message", message)));
             Thread.Sleep(500);
         }
         void putPlayerLastInList() //Switchs the next player to index 0 
@@ -350,7 +372,7 @@ namespace Server
         int switchColor() 
         {
 
-            Task.Run(async () => await ConnectHandler.SendPacket(players[0].client, new Packet("switchColor", "")));
+            ConnectHandler.SendPacket(players[0].client, new Packet("switchColor", "")).GetAwaiter().GetResult();
 
             Packet ChoicePacket = null;
             while (ChoicePacket == null)

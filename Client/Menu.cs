@@ -9,7 +9,11 @@ namespace Client
     {
         public static void StartMenu() 
         {
+            Console.Clear();
             Console.WriteLine("YOOOOOOOO Hvad så, Velkommen til Uno MP");
+
+            Console.WriteLine("Skriv dit username");
+            string name = Console.ReadLine();
 
             Console.WriteLine("1. Search for Lobby");
             Console.WriteLine("2. Host Lobby");
@@ -21,34 +25,14 @@ namespace Client
             switch (choice)
             {
                 case 1:
-                    Connect.JoinLobby();
+                    Connect.ConnectToServer("join", name);
                     break;
                 case 2:
-                    Connect.HostLobby();
+                    Connect.ConnectToServer("host", name);
                     break;
                 default:
                     break;
             }
-        }
-
-        public static void WaitingToGameStart() 
-        {
-            string message = string.Empty;
-
-            while (message != "start")
-            {
-                message = Connect.Waiting();
-
-                if (message != "" && message != "start") 
-                {
-                    Console.WriteLine(message);
-                    message = string.Empty;
-                }
-                
-            }
-            Console.WriteLine(message);
-            Console.ReadLine();
-            //Console.Clear();
         }
 
 

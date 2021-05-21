@@ -20,23 +20,34 @@ namespace Server
         public List<SendLobby> Lobbies { get; set; }
 
         // Makes a packet
+        [JsonConstructor]
+        public Packet(string command = "", string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
+        {
+            Command = command;
+            Message = message;
+            Lobbies = lobbies;
+            Cards = cards;
+        }
+        /*
+        public Packet(string command = "")
+        {
+            Command = command;
+        }
         public Packet(string command = "", string message = "")
         {
             Command = command;
             Message = message;
         }
-        public Packet(string command = "", string message = "", List<SendLobby> lobbies = default)
-        {
-            Command = command;
-            Message = message;
-            Lobbies = lobbies;
-        }
+        
         public Packet(string command = "", string message = "", List<Card> cards = default)
         {
             Command = command;
             Message = message;
             Cards = cards;
         }
+        */
+
+
         public override string ToString()
         {
             return string.Format(

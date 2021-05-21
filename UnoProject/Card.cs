@@ -36,6 +36,9 @@ namespace Server
                 case cardType.SWICTH_COLOR:
                     number = -6;
                     break;
+                case cardType.BLANK:
+                    number = -7;
+                    break;
             }
         }
 
@@ -55,7 +58,8 @@ namespace Server
             SWICTH_COLOR,
             REVERSE,
             SKIP,
-            NULL
+            NULL,
+            BLANK
         }
 
         public void showCard()
@@ -122,7 +126,8 @@ namespace Server
 
                 case cardType.SKIP:
                     return "S";
-
+                case cardType.BLANK:
+                    return "U";
                 default:
                     break;
             }

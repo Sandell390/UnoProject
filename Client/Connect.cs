@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using System.Net.Sockets;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Client
@@ -10,70 +11,15 @@ namespace Client
     static class Connect
     {
         static TcpClient _client = new TcpClient();
+        static bool hosting = false;
+        public static IPAddress serverIP { get; set; }
 
         #region OG
-        public static void JoinLobby() 
-        {
-            Connect:
-            try
-            {
-                ConnectToServer("s");
-
-                
-                byte[] bytes = new byte[10];
-                client.Client.Receive(bytes);
-
-                int buffer = BitConverter.ToInt32(bytes,0);
-                client.Client.Send(new byte[1]);
-
-                bytes = new byte[buffer];
-                client.Client.Receive(bytes, 0, bytes.Length,SocketFlags.None);
-
-                string names = Encoding.UTF8.GetString(bytes);
-
-                List<string> listOfLobbies = new List<string>();
-
-                int previousPoint = 0;
-
-                for (int i = 0; i < names.Length; i++)
-                {
-                    previousPoint = names.IndexOf(";");
-
-                    listOfLobbies.Add(names.Substring(0, previousPoint));
-
-                    names = names.Replace(names, names.Remove(0, previousPoint + 1));
-                }
-
-                Console.WriteLine("Choice a lobby: ");
-
-                for (int i = 0; i < listOfLobbies.Count; i++)
-                {
-                    Console.WriteLine($"[{i}] {listOfLobbies[i]}");
-                }
-
-                int choice = int.Parse(Console.ReadLine());
-
-                bytes = BitConverter.GetBytes(choice);
-                client.Client.Send(bytes);
-
-
-
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.Message);
-                Console.WriteLine("Can not connect to the server... retrying ");
-
-                goto Connect;
-            }
-        }
-
         public static void HostLobby()
         {
             Connect:
             try
             {
-                ConnectToServer("h");
 
                 string lobbyName = string.Empty;
                 do
@@ -83,56 +29,29 @@ namespace Client
 
                 } while (lobbyName.Length > 40);
 
-                byte[] lobbyNameBytes = Encoding.UTF8.GetBytes(lobbyName);
+                _sendPacket(new Packet("lobbyName", lobbyName)).GetAwaiter().GetResult();
 
-                client.Client.Send(lobbyNameBytes);
+                hosting = true;
 
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
                 Console.WriteLine("Can not connect to the server... retrying ");
+                Thread.Sleep(100);
                 
                 goto Connect;
             }
         }
-        static void ConnectToServer(string connectType) 
+
+
+        static void startLobby() 
         {
-            client.Connect(IPAddress.Loopback, 1234);
-
-            byte[] test = new byte[1];
-
-            test = Encoding.UTF8.GetBytes(connectType);
-
-            client.Client.Send(test);
-
-            NetworkStream ns = client.GetStream();
-            byte[] bytes = new byte[10];
-
-            ns.Read(bytes, 0, bytes.Length);
-
-            ns.Flush();
-
-            string message = Encoding.UTF8.GetString(bytes);
-
-            Console.WriteLine(message + " To server");
-        }
-        public static string Waiting() 
-        {
-            string message = string.Empty;
-
-            byte[] buffer = new byte[30];
-            client.Client.Receive(buffer, 0, buffer.Length, SocketFlags.Peek);
-
-            if (buffer[0] == 0) 
+            while (Console.KeyAvailable && Console.ReadKey(true).Key == ConsoleKey.Q && hosting)
             {
-                return "";
+                _sendPacket(new Packet("start", "")).GetAwaiter().GetResult();
+                hosting = false;
             }
-
-            message = Encoding.UTF8.GetString(buffer);
-
-            return message;
-        
         }
         #endregion
 
@@ -141,7 +60,7 @@ namespace Client
 
         // Messaging
         private static NetworkStream _msgStream = null;
-        private static Dictionary<string, Func<string, Task>> _commandHandlers = new Dictionary<string, Func<string, Task>>();
+        private static Dictionary<string, Func<string, List<SendLobby>, List<Card>, Task>> _commandHandlers = new Dictionary<string, Func<string, List<SendLobby>, List<Card>, Task>>();
 
         // Cleans up any leftover network resources
         private static void _cleanupNetworkResources()
@@ -152,12 +71,12 @@ namespace Client
         }
 
         // Connects to the games server
-        public static void ConnectToServer()
+        public static void ConnectToServer(string connectType, string name)
         {
             // Connect to the server
             try
             {
-                _client.Connect(IPAddress.Loopback, 1234);   // Resolves DNS for us
+                _client.Connect(serverIP, 1234);   // Resolves DNS for us
             }
             catch (SocketException se)
             {
@@ -176,27 +95,33 @@ namespace Client
 
                 // Hook up some packet command handlers
                 _commandHandlers["bye"] = _handleBye;
-                _commandHandlers["lobbies"] = ;
-                _commandHandlers["winner"] = ;
-                _commandHandlers["joinedP"] = ;
-                _commandHandlers["failedStart"] = ;
-                _commandHandlers["cards"] = ;
-                _commandHandlers["ups"] = ;
-                _commandHandlers["failed"] = ;
-                _commandHandlers["done"] = ;
-                _commandHandlers["switchColor"] = ;
+                _commandHandlers["lobbies"] = _handleLobbies;
+                _commandHandlers["winner"] = _handleWinner;
+                _commandHandlers["cards"] = _handleCards;
+                _commandHandlers["message"] = _handleMessage;
+                _commandHandlers["failedStart"] = _handleFailedStart;
+                //_commandHandlers["done"] = ;
+                _commandHandlers["switchColor"] = _handleSwitchColor;
+
+                Thread.Sleep(300);
+                Task.Run(async () => await _sendPacket(new Packet(connectType, name)));
+
+                if(connectType == "host")
+                    HostLobby();
+
+                Run();
             }
             else
             {
                 // Nope...
                 _cleanupNetworkResources();
-                Console.WriteLine("Wasn't able to connect to the server at {0}:{1}.", ServerAddress, Port);
+                Console.WriteLine("Wasn't able to connect to the server");
             }
         }
 
         // Requests a disconnect, will send a "bye," message to the server
         // This should only be called by the user
-        public void Disconnect()
+        public static void Disconnect()
         {
             Console.WriteLine("Disconnecting from the server...");
             Running = false;
@@ -205,7 +130,7 @@ namespace Client
         }
 
         // Main loop for the Games Client
-        public void Run()
+        public static void Run()
         {
             bool wasRunning = Running;
 
@@ -213,6 +138,10 @@ namespace Client
             List<Task> tasks = new List<Task>();
             while (Running)
             {
+                if(hosting)
+                    startLobby();
+
+
                 // Check for new packets
                 tasks.Add(_handleIncomingPackets());
 
@@ -237,7 +166,7 @@ namespace Client
         }
 
         // Sends packets to the server asynchronously
-        private async Task _sendPacket(Packet packet)
+        private async static Task _sendPacket(Packet packet)
         {
             try
             {                // convert JSON to buffer and its length to a 16 bit unsigned integer buffer
@@ -254,12 +183,16 @@ namespace Client
 
                 //Console.WriteLine("[SENT]\n{0}", packet);
             }
-            catch (Exception) { }
+            catch (Exception e) 
+            {
+                Console.WriteLine("Cant send packet");
+                Console.WriteLine(e);
+            }
         }
 
         // Checks for new incoming messages and handles them
         // This method will handle one Packet at a time, even if more than one is in the memory stream
-        private async Task _handleIncomingPackets()
+        private async static Task _handleIncomingPackets()
         {
             try
             {
@@ -279,21 +212,22 @@ namespace Client
                     string jsonString = Encoding.UTF8.GetString(jsonBuffer);
                     Packet packet = Packet.FromJson(jsonString);
 
+                    //Console.WriteLine("[RECEIVED]\n{0}", packet);
                     // Dispatch it
                     try
                     {
-                        await _commandHandlers[packet.Command](packet.Message);
+                        await _commandHandlers[packet.Command](packet.Message, packet.Lobbies, packet.Cards);
                     }
                     catch (KeyNotFoundException) { }
 
-                    //Console.WriteLine("[RECEIVED]\n{0}", packet);
+                    
                 }
             }
             catch (Exception) { }
         }
 
         #region Command Handlers
-        private static Task _handleBye(string message)
+        private static Task _handleBye(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
         {
             // Print the message
             Console.WriteLine("The server is disconnecting us with this message:");
@@ -303,7 +237,7 @@ namespace Client
             Running = false;
             return Task.FromResult(0);  // Task.CompletedTask exists in .NET v4.6
         }
-        private static Task _handleLobbies(List<SendLobby> lobbies) 
+        private static async Task _handleLobbies(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default) 
         {
             int count = 0;
             foreach (SendLobby lobby in lobbies)
@@ -322,40 +256,111 @@ namespace Client
                 count++;
             }
 
+            Console.WriteLine();
 
+            int chocie = 0;
+            bool goodLobby = false;
+            do
+            {
+                chocie = int.Parse(Console.ReadLine());
+
+                if (!lobbies[chocie].started)
+                {
+                    goodLobby = true;
+                }
+                else
+                {
+                    Console.WriteLine("You cant join that lobby, try again");
+                }
+
+            } while (!goodLobby);
+            while (!goodLobby)
+            {
+                
+            }
+
+            Packet resp = new Packet("lobbyName", chocie.ToString());
+
+            await _sendPacket(resp);
         }
-        private static Task _()
+        private static Task _handleMessage(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
+        {
+            Console.Write(message);
+            return Task.FromResult(0);
+        }
+        
+        private async static Task _handleCards(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
+        {
+            Console.Clear();
+
+            int index = message.IndexOf(';');
+            string uno = message.Substring(index + 1, (message.Length - index) - 1);
+            message = message.Remove(index, uno.Length + 1);
+
+            Console.WriteLine("Played card: ");
+
+            cards[0].showCard();
+
+            Console.WriteLine();
+            Console.WriteLine($"{message}'s cards: ");
+            if (cards[1].CardType == Card.cardType.BLANK) 
+            {
+                for (int i = 1; i < cards.Count; i++)
+                {
+                    cards[i].showCard();
+                }
+
+                Console.WriteLine();
+                Console.WriteLine("Wait");
+            }
+            else
+            {
+                PlayerAction.playerCards = new List<Card>();
+                
+
+                int card = 0;
+                for (int i = 1; i < cards.Count; i++)
+                {
+                    PlayerAction.playerCards.Add(cards[i]);
+                }
+                string choice = PlayerAction.playerAction(uno, out card);
+
+                Packet resp = new Packet(choice, card.ToString());
+                await _sendPacket(resp);
+            }
+        }
+        
+        private static Task _handleFailedStart(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
+        {
+            Console.WriteLine(message);
+            hosting = true;
+            return Task.FromResult(0);
+        }
+       
+        private async static Task _handleSwitchColor(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
+        {
+            int colorPick = PlayerAction.switchColor();
+            Packet resp = new Packet("color", colorPick.ToString());
+            await _sendPacket(resp);
+        }
+        
+        private static Task _handleWinner(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
+        {
+            Console.Clear();
+            Console.WriteLine(message);
+            Running = false;
+            return Task.FromResult(0);
+        }
+        /*
+        private static Task _(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
         {
 
         }
-        private static Task _()
+        private static Task _(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
         {
 
         }
-        private static Task _()
-        {
-
-        }
-        private static Task _()
-        {
-
-        }
-        private static Task _()
-        {
-
-        }
-        private static Task _()
-        {
-
-        }
-        private static Task _()
-        {
-
-        }
-        private static Task _()
-        {
-
-        }
+        */
         #endregion // Command Handlers
 
         #region TcpClient Helper Methods
@@ -375,35 +380,5 @@ namespace Client
             }
         }
         #endregion // TcpClient Helper Methods
-
-
-
-
-        #region Program Execution
-        public static TcpGamesClient gamesClient;
-
-        public static void InterruptHandler(object sender, ConsoleCancelEventArgs args)
-        {
-            // Perform a graceful disconnect
-            args.Cancel = true;
-            gamesClient?.Disconnect();
-        }
-
-        public static void Main(string[] args)
-        {
-            // Setup the Games Client
-            string host = "localhost";//args[0].Trim();
-            int port = 6000;//int.Parse(args[1].Trim());
-            gamesClient = new TcpGamesClient(host, port);
-
-            // Add a handler for a Ctrl-C press
-            Console.CancelKeyPress += InterruptHandler;
-
-            // Try to connecct & interact with the server
-            gamesClient.Connect();
-            gamesClient.Run();
-
-        }
-        #endregion // Program Execution
     }
 }

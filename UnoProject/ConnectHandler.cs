@@ -10,6 +10,7 @@ namespace Server
 {
     public static class ConnectHandler
     {
+        /*
         #region MIT
 
         public static void MakeLobby(TcpClient client) 
@@ -75,7 +76,7 @@ namespace Server
             lobbies[playerchoice].JoinMessage();
         }
         #endregion
-
+        */
         // Listens for new incoming connections
         private static TcpListener _listener;
 
@@ -101,6 +102,7 @@ namespace Server
         // The main loop for the games server
         public static void Run()
         {
+            _listener = new TcpListener(IPAddress.Any,1234);
             Console.WriteLine("Starting the server.");
             Console.WriteLine("Press Ctrl-C to shutdown the server at any time.");
 
@@ -139,22 +141,33 @@ namespace Server
         {
             Console.WriteLine($"{host.name} are making a lobby");
 
-            Packet lobbyName = ReceivePacket(host.client).GetAwaiter().GetResult();
+            Packet lobbyName = null;
+
+            while (lobbyName == null)
+            {
+                lobbyName = ReceivePacket(host.client).GetAwaiter().GetResult();
+                Thread.Sleep(20);
+            }
 
             if (lobbyName.Command == "lobbyName") 
             {
+                
                 Lobby newLobby = new Lobby(lobbyName.Message, host);
                 lobbies.Add(newLobby);
+                newLobby.players.Add(host);
+                newLobby.Host = host;
                 Thread gameThread = new Thread(new ThreadStart(newLobby.Run));
                 gameThread.Start();
                 _gameThreads.Add(gameThread);
+
+                Console.WriteLine(newLobby.lobbyName + " has been created");
             }
 
         }
 
         private static async Task PutPlayerInPlayer(Player newPlayer) 
         {
-            Console.WriteLine($"{newPlayer} is joining a lobby");
+            Console.WriteLine($"{newPlayer.name} is joining a lobby");
 
             List<SendLobby> sendLobbies = new List<SendLobby>();
 
@@ -189,7 +202,14 @@ namespace Server
             Console.WriteLine("New connection from {0}.", newClient.Client.RemoteEndPoint);
 
             // Store them and put them in the waiting lobby
-            Packet clientType = await ReceivePacket(newClient);
+            Packet clientType = null;
+
+            while (clientType == null)
+            {
+                clientType = ReceivePacket(newClient).GetAwaiter().GetResult();
+                Console.WriteLine("Waiting on client");
+                Thread.Sleep(50);
+            }
 
             Player player = new Player(newClient, clientType.Message);
 
@@ -244,7 +264,7 @@ namespace Server
                 // Send the packet
                 await client.GetStream().WriteAsync(msgBuffer, 0, msgBuffer.Length);
 
-                //Console.WriteLine("[SENT]\n{0}", packet);
+                Console.WriteLine("[SENT]\n{0}", packet);
             }
             catch (Exception e)
             {
@@ -281,7 +301,7 @@ namespace Server
                 string jsonString = Encoding.UTF8.GetString(jsonBuffer);
                 packet = Packet.FromJson(jsonString);
 
-                //Console.WriteLine("[RECEIVED]\n{0}", packet);
+                Console.WriteLine("[RECEIVED]\n{0}", packet);
             }
             catch (Exception e)
             {
