@@ -23,6 +23,7 @@ namespace Client
 
             Menu.StartMenu();
 
+            Console.ReadLine();
             
 
         }

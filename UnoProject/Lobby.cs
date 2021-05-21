@@ -83,6 +83,7 @@ namespace Server
 
             while (isGameStarted)
             {
+                _checkForDisconnects();
                 NextRoud();
                 if (winner != null)
                 {
@@ -111,6 +112,11 @@ namespace Server
                     players.Remove(player);     // Remove from list
                     ConnectHandler._cleanupClient(player.client);
                 }
+            }
+
+            if (players.Count == 1) 
+            {
+                //ConnectHandler.RemoveLobby(Thread.CurrentThread,this);
             }
         }
 
@@ -209,7 +215,7 @@ namespace Server
                 }
                 for (int i = 1; i < players.Count; i++)
                 {
-                    ConnectHandler.SendPacket(players[i].client, new Packet("cards", $"{players[0].name}", cards: blankCards)).GetAwaiter().GetResult();
+                    ConnectHandler.SendPacket(players[i].client, new Packet("cards", $"{players[0].name};uno", cards: blankCards)).GetAwaiter().GetResult();
                 }
 
                 //playedDeck[playedDeck.Count - 1].showCard();
@@ -252,6 +258,7 @@ namespace Server
                     putPlayerLastInList();
                     completeRound = true;
                     stackCard = false;
+                    
                 }
                 else if (ChoicePacket.Command == "downCard" && int.TryParse(ChoicePacket.Message, out int playerChoiceInt)) //Checks if player have choose a number
                 {
@@ -329,7 +336,7 @@ namespace Server
         void Error(string message)
         {
             Thread.Sleep(10);
-            Task.Run(async () => await ConnectHandler.SendPacket(players[0].client, new Packet("message", message)));
+            ConnectHandler.SendPacket(players[0].client, new Packet("message", message)).GetAwaiter().GetResult();
             Thread.Sleep(500);
         }
         void putPlayerLastInList() //Switchs the next player to index 0 
@@ -388,9 +395,9 @@ namespace Server
         {
             bool playerStackCard = false;
 
-            for (int i = 0; i < players[0].playerCards.Count; i++)  //Checks if the player has some 4plus or 2plus
+            for (int i = 0; i < players[1].playerCards.Count; i++)  //Checks if the player has some 4plus or 2plus
             {
-                if (players[0].playerCards[i].CardType == currentCard.CardType)
+                if (players[1].playerCards[i].CardType == currentCard.CardType)
                 {
                     playerStackCard = true;
                     stackCard = true;
@@ -399,7 +406,7 @@ namespace Server
             //Hej det er en test
             if (!playerStackCard) //If they dont have them then the amout of cards is giving to the player
             {
-                givPlayerCards(stackCardAmount, 0);
+                givPlayerCards(stackCardAmount, 1);
                 playerStackCard = false;
                 stackCardAmount = 0;
             }

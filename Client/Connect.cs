@@ -274,10 +274,6 @@ namespace Client
                 }
 
             } while (!goodLobby);
-            while (!goodLobby)
-            {
-                
-            }
 
             Packet resp = new Packet("lobbyName", chocie.ToString());
 
@@ -292,7 +288,6 @@ namespace Client
         private async static Task _handleCards(string message = "", List<SendLobby> lobbies = default, List<Card> cards = default)
         {
             Console.Clear();
-
             int index = message.IndexOf(';');
             string uno = message.Substring(index + 1, (message.Length - index) - 1);
             message = message.Remove(index, uno.Length + 1);

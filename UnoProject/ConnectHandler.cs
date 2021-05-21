@@ -10,73 +10,7 @@ namespace Server
 {
     public static class ConnectHandler
     {
-        /*
-        #region MIT
-
-        public static void MakeLobby(TcpClient client) 
-        {
-            Player player = new Player() { client = client };
-
-            Lobby lobby = new Lobby();
-
-            byte[] lobbyName = new byte[40];
-
-            client.Client.Receive(lobbyName, SocketFlags.None);
-
-            List<byte> test = new List<byte>();
-            for (int i = 0; i < lobbyName.Length; i++)
-            {
-                if (lobbyName[i] != 0)
-                {
-                    test.Add(lobbyName[i]);
-                }
-            }
-
-            string name = Encoding.UTF8.GetString(test.ToArray());
-
-            lobby.lobbyName = name;
-
-            Console.WriteLine($"Lobby name set: {lobby.lobbyName}");
-
-            lobbies.Add(lobby);
-            lobby.players.Add(player);
-
-
-        }
         
-        public static void PutPlayerInLobby(TcpClient client) 
-        {
-            Console.WriteLine("Lobby");
-            Player player = new Player() { client = client };
-
-            string lobbynamies = string.Empty;
-
-            foreach (Lobby lobby in lobbies)
-            {
-                lobbynamies += lobby.lobbyName + ";";
-            }
-
-            byte[] bytes = BitConverter.GetBytes(lobbynamies.Length);
-            client.Client.Send(bytes, SocketFlags.None);
-            
-            bytes = new byte[lobbynamies.Length];
-
-            client.Client.Receive(new byte[1]);
-
-            bytes = Encoding.UTF8.GetBytes(lobbynamies);
-            client.Client.Send(bytes, SocketFlags.None);
-
-            bytes = new byte[5];
-            client.Client.Receive(bytes);
-
-            int playerchoice = BitConverter.ToInt32(bytes);
-
-            lobbies[playerchoice].players.Add(player);
-
-            lobbies[playerchoice].JoinMessage();
-        }
-        #endregion
-        */
         // Listens for new incoming connections
         private static TcpListener _listener;
 
@@ -137,6 +71,12 @@ namespace Server
             Console.WriteLine("The server has been shut down.");
         }
 
+        public static void RemoveLobby(Thread lobbyThread, Lobby lobby) 
+        {
+            Console.WriteLine($"{lobby.lobbyName} is closing");
+            lobbies.Remove(lobby);
+            lobbyThread.Abort();
+        }
         private static void HostLobby(Player host) 
         {
             Console.WriteLine($"{host.name} are making a lobby");
@@ -207,7 +147,7 @@ namespace Server
             while (clientType == null)
             {
                 clientType = ReceivePacket(newClient).GetAwaiter().GetResult();
-                Console.WriteLine("Waiting on client");
+                
                 Thread.Sleep(50);
             }
 
